@@ -1,0 +1,3 @@
+# Firebase Storage non utilise dans ce projet.
+# Toutes les donnees texte sont stockees dans Firestore (gratuit).
+# Les justificatifs sont conserves dans le depot GitHub (/justificatifs/).
