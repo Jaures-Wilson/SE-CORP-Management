@@ -5,31 +5,16 @@ import {
 } from 'firebase/firestore';
 import TopBar from '../shared/TopBar';
 
-function StatusBadge({ status }) {
-  if (status === 'valide') return <span className="badge badge-success">Valide</span>;
+function StatusBadge({ status, traite }) {
+  if (status === 'valide') return traite ? <span className="badge badge-success">Valide — Traite</span> : <span className="badge" style={{ background: '#DBEAFE', color: '#1E40AF' }}>Valide — En cours de traitement</span>;
   if (status === 'rejete') return <span className="badge badge-error">Rejete</span>;
   return <span className="badge badge-warning">En attente de validation</span>;
 }
 
-function DossierCard({ dossier, onResubmit }) {
-  return (
-    <div className="card" style={{ marginBottom: 12 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-        <div style={{ fontWeight: 700, fontFamily: 'var(--font-display)' }}>{dossier.concours}</div>
-        <StatusBadge status={dossier.status} />
-      </div>
-      {dossier.status === 'rejete' && dossier.motifRejet && (
-        <div className="alert alert-error" style={{ fontSize: '0.85rem', marginTop: 8 }}>
-          <strong>Motif du rejet :</strong> {dossier.motifRejet}
-        </div>
-      )}
-      {dossier.status === 'rejete' && (
-        <button className="btn btn-ghost btn-sm" style={{ marginTop: 8 }} onClick={() => onResubmit(dossier)}>
-          Modifier et renvoyer
-        </button>
-      )}
-    </div>
-  );
+function fmtDate(ts) {
+  if (!ts) return '';
+  const d = ts.seconds ? new Date(ts.seconds * 1000) : new Date(ts);
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 export default function ClientDossiers({ student, onBack, onLogout }) {
@@ -42,17 +27,21 @@ export default function ClientDossiers({ student, onBack, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [paiements, setPaiements] = useState(null);
 
   async function loadData() {
     setLoading(true);
-    const [dosSnap, configSnap] = await Promise.all([
+    const [dosSnap, configSnap, studentSnap] = await Promise.all([
       getDocs(query(collection(db, 'dossiers'), where('studentId', '==', student.id))),
-      getDoc(doc(db, 'config', 'dossierForm'))
+      getDoc(doc(db, 'config', 'dossierForm')),
+      getDoc(doc(db, 'students', student.id))
     ]);
-    setDossiers(dosSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-    if (configSnap.exists()) {
-      setFormFields(configSnap.data().fields || []);
-    }
+    const sorted = dosSnap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    setDossiers(sorted);
+    if (configSnap.exists()) setFormFields(configSnap.data().fields || []);
+    if (studentSnap.exists()) setPaiements(studentSnap.data().paiements || null);
     setLoading(false);
   }
 
@@ -109,19 +98,12 @@ export default function ClientDossiers({ student, onBack, onLogout }) {
 
         {showInfo && (
           <div className="card" style={{ marginBottom: 16, fontSize: '0.88rem', lineHeight: 1.7 }}>
-            <p style={{ marginBottom: 8 }}>
-              Les frais de concours comprennent : acte de naissance, timbres fiscaux, timbres communaux, depot bancaire aupres de l'Etat, et autres pieces administratives.
-            </p>
-            <p style={{ marginBottom: 8 }}>
-              <strong>Tarif S.E. Corporation :</strong>
-            </p>
-            <ul style={{ paddingLeft: 16, marginBottom: 8 }}>
+            <p style={{ marginBottom: 8 }}>Les frais comprennent : acte de naissance, timbres fiscaux, timbres communaux, depot bancaire aupres de l'Etat.</p>
+            <p><strong>Tarif S.E. Corporation :</strong></p>
+            <ul style={{ paddingLeft: 16, marginTop: 4 }}>
               <li>Tous concours : <strong>40 000 F CFA</strong></li>
-              <li>Ecoles necessitant un casier judiciaire (IDE, Ecole des Travaux, etc.) : <strong>45 000 F CFA</strong></li>
+              <li>Ecoles avec casier judiciaire (IDE, Ecole des Travaux...) : <strong>45 000 F CFA</strong></li>
             </ul>
-            <p style={{ color: 'var(--text-muted)' }}>
-              Le dossier doit etre soumis par concours. Vous pouvez soumettre plusieurs dossiers pour plusieurs concours differents.
-            </p>
           </div>
         )}
 
@@ -129,13 +111,54 @@ export default function ClientDossiers({ student, onBack, onLogout }) {
           <div className="loading"><div className="spinner" /></div>
         ) : (
           <>
+            {paiements && (paiements.dossierTotal > 0 || paiements.dossierPaye > 0) && (
+              <div className="card" style={{ marginBottom: 16, borderLeft: '3px solid #0E6655' }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.9rem', marginBottom: 10, color: '#0E6655' }}>
+                  Paiements dossiers enregistres
+                </div>
+                <div className="two-col" style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: '0.85rem' }}>
+                    <div className="text-muted" style={{ fontSize: '0.72rem' }}>Total du</div>
+                    <strong>{(paiements.dossierTotal || 0).toLocaleString('fr-FR')} F</strong>
+                  </div>
+                  <div style={{ fontSize: '0.85rem' }}>
+                    <div className="text-muted" style={{ fontSize: '0.72rem' }}>Deja verse</div>
+                    <strong style={{ color: 'var(--success)' }}>{(paiements.dossierPaye || 0).toLocaleString('fr-FR')} F</strong>
+                  </div>
+                </div>
+                {paiements.dossierCommentaire && (
+                  <div style={{ fontSize: '0.83rem', color: 'var(--text-muted)', borderTop: '1px solid var(--gray-1)', paddingTop: 8 }}>
+                    {paiements.dossierCommentaire}
+                  </div>
+                )}
+              </div>
+            )}
+
             {dossiers.length > 0 && (
               <div style={{ marginBottom: 20 }}>
                 <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '0.95rem', marginBottom: 12 }}>
-                  Mes souscriptions
+                  Mes souscriptions ({dossiers.length})
                 </h3>
                 {dossiers.map(d => (
-                  <DossierCard key={d.id} dossier={d} onResubmit={openForm} />
+                  <div key={d.id} className="card" style={{ marginBottom: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontFamily: 'var(--font-display)' }}>{d.concours}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>{fmtDate(d.createdAt)}</div>
+                      </div>
+                      <StatusBadge status={d.status} traite={d.traite} />
+                    </div>
+                    {d.status === 'rejete' && d.motifRejet && (
+                      <div className="alert alert-error" style={{ fontSize: '0.83rem', marginTop: 8 }}>
+                        <strong>Motif du rejet :</strong> {d.motifRejet}
+                      </div>
+                    )}
+                    {d.status === 'rejete' && (
+                      <button className="btn btn-ghost btn-sm" style={{ marginTop: 8 }} onClick={() => openForm(d)}>
+                        Modifier et renvoyer
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             )}
@@ -150,63 +173,35 @@ export default function ClientDossiers({ student, onBack, onLogout }) {
           <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setShowForm(false); }}>
             <div className="modal">
               <div className="modal-header">
-                <span className="modal-title">Souscrire au service dossier</span>
+                <span className="modal-title">Souscrire — service dossier</span>
                 <button className="close-btn" onClick={() => setShowForm(false)}>x</button>
               </div>
-
               <div className="field">
                 <label style={{ fontWeight: 700 }}>Concours vise (obligatoire)</label>
-                <input
-                  type="text"
-                  placeholder="Ex : ENAM, FASA, IDE..."
-                  value={concours}
-                  onChange={e => setConcours(e.target.value)}
-                />
+                <input type="text" placeholder="Ex : ENAM, FASA, IDE..." value={concours} onChange={e => setConcours(e.target.value)} />
               </div>
-
               {formFields.map(field => (
                 <div className="field" key={field.id}>
                   <label>{field.label}{field.required && ' *'}</label>
                   {field.type === 'textarea' ? (
-                    <textarea
-                      placeholder={field.placeholder || ''}
-                      value={formData[field.id] || ''}
-                      onChange={e => setFormData(p => ({ ...p, [field.id]: e.target.value }))}
-                    />
+                    <textarea placeholder={field.placeholder || ''} value={formData[field.id] || ''} onChange={e => setFormData(p => ({ ...p, [field.id]: e.target.value }))} />
                   ) : (
-                    <input
-                      type={field.type || 'text'}
-                      placeholder={field.placeholder || ''}
-                      value={formData[field.id] || ''}
-                      onChange={e => setFormData(p => ({ ...p, [field.id]: e.target.value }))}
-                    />
+                    <input type={field.type || 'text'} placeholder={field.placeholder || ''} value={formData[field.id] || ''} onChange={e => setFormData(p => ({ ...p, [field.id]: e.target.value }))} />
                   )}
                 </div>
               ))}
-
               <div className="alert alert-warning" style={{ fontSize: '0.83rem' }}>
-                Votre souscription sera examinee par l'administration avant validation. Un appel pourra vous etre passe pour confirmation.
+                Votre souscription sera examinee par l'administration avant validation.
               </div>
-
-              <button
-                className="btn btn-primary"
-                onClick={handleSubmit}
-                disabled={submitting || !concours.trim()}
-              >
-                {submitting ? <span className="spinner" style={{ width: 20, height: 20, borderWidth: 2 }} /> : 'Valider l\'inscription'}
+              <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting || !concours.trim()}>
+                {submitting ? <span className="spinner" style={{ width: 20, height: 20, borderWidth: 2 }} /> : "Valider l'inscription"}
               </button>
             </div>
           </div>
         )}
 
         <div className="divider" />
-        <a
-          href="https://wa.me/237655230364"
-          target="_blank"
-          rel="noreferrer"
-          className="btn btn-outline"
-          style={{ textDecoration: 'none', marginTop: 8 }}
-        >
+        <a href="https://wa.me/237655230364" target="_blank" rel="noreferrer" className="btn btn-outline" style={{ textDecoration: 'none', marginTop: 8 }}>
           Contacter l'administration
         </a>
       </div>

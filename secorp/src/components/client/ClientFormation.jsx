@@ -3,27 +3,21 @@ import { db } from '../../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import TopBar from '../shared/TopBar';
 
-function PaymentRow({ label, total, paye, couleur }) {
+function PaymentRow({ label, total, paye, couleur, commentaire }) {
   const restant = Math.max(0, (total || 0) - (paye || 0));
   const pct = total > 0 ? Math.min(100, Math.round(((paye || 0) / total) * 100)) : 0;
 
   return (
     <div className="card" style={{ marginBottom: 12 }}>
-      <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.95rem', marginBottom: 12 }}>
-        {label}
-      </div>
+      <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.95rem', marginBottom: 12 }}>{label}</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
         <div style={{ padding: '10px', background: 'var(--off-white)', borderRadius: 8 }}>
           <div className="text-muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase' }}>Total</div>
-          <div style={{ fontWeight: 700, fontSize: '1rem', marginTop: 2 }}>
-            {(total || 0).toLocaleString('fr-FR')} F
-          </div>
+          <div style={{ fontWeight: 700, fontSize: '1rem', marginTop: 2 }}>{(total || 0).toLocaleString('fr-FR')} F</div>
         </div>
         <div style={{ padding: '10px', background: 'var(--success-bg)', borderRadius: 8 }}>
           <div style={{ color: 'var(--success)', fontSize: '0.72rem', textTransform: 'uppercase' }}>Deja verse</div>
-          <div style={{ fontWeight: 700, fontSize: '1rem', marginTop: 2, color: 'var(--success)' }}>
-            {(paye || 0).toLocaleString('fr-FR')} F
-          </div>
+          <div style={{ fontWeight: 700, fontSize: '1rem', marginTop: 2, color: 'var(--success)' }}>{(paye || 0).toLocaleString('fr-FR')} F</div>
         </div>
       </div>
       <div style={{ background: 'var(--gray-1)', borderRadius: 6, height: 8, marginBottom: 8 }}>
@@ -32,13 +26,16 @@ function PaymentRow({ label, total, paye, couleur }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
         <span style={{ color: 'var(--text-muted)' }}>{pct}% regle</span>
         {restant > 0 ? (
-          <span style={{ color: 'var(--error)', fontWeight: 600 }}>
-            Reste : {restant.toLocaleString('fr-FR')} F
-          </span>
+          <span style={{ color: 'var(--error)', fontWeight: 600 }}>Reste : {restant.toLocaleString('fr-FR')} F</span>
         ) : (
           <span style={{ color: 'var(--success)', fontWeight: 600 }}>Solde</span>
         )}
       </div>
+      {commentaire && (
+        <div style={{ marginTop: 10, padding: '8px 10px', background: 'var(--off-white)', borderRadius: 8, fontSize: '0.82rem', color: 'var(--text-muted)', borderLeft: `3px solid ${couleur}` }}>
+          {commentaire}
+        </div>
+      )}
     </div>
   );
 }
@@ -73,16 +70,18 @@ export default function ClientFormation({ student, onBack, onLogout }) {
               couleur="var(--navy)"
             />
             <PaymentRow
-              label="Frais de dossier"
+              label="Service dossier"
               total={paiements.dossierTotal}
               paye={paiements.dossierPaye}
               couleur="#0E6655"
+              commentaire={paiements.dossierCommentaire}
             />
             <PaymentRow
-              label="CNI"
+              label="Service CNI"
               total={paiements.cniTotal}
               paye={paiements.cniPaye}
               couleur="#784212"
+              commentaire={paiements.cniCommentaire}
             />
           </>
         ) : (
@@ -93,13 +92,7 @@ export default function ClientFormation({ student, onBack, onLogout }) {
         )}
 
         <div className="divider" />
-        <a
-          href="https://wa.me/237655230364"
-          target="_blank"
-          rel="noreferrer"
-          className="btn btn-outline"
-          style={{ textDecoration: 'none' }}
-        >
+        <a href="https://wa.me/237655230364" target="_blank" rel="noreferrer" className="btn btn-outline" style={{ textDecoration: 'none' }}>
           Contacter l'administration
         </a>
       </div>

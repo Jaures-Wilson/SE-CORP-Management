@@ -22,7 +22,7 @@ const SECTIONS = [
   },
   {
     id: 'dossiers',
-    label: 'Frais de dossier',
+    label: 'Service dossier',
     desc: 'Inscription aux concours par SEC',
     color: '#0E6655',
     icon: '◉'
